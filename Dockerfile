@@ -13,7 +13,6 @@ RUN npm install --omit=dev --no-cache
 COPY wake.js ./
 COPY crontab /etc/crontabs/root
 
-# Required for cron + volume mount
 RUN mkdir -p /var/log
 
-CMD ["crond", "-f", "-l", "2"]
+CMD ["sh", "-c", "crond -f -l 8"]
