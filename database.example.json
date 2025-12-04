@@ -5,8 +5,9 @@
     "host": "aws-0-eu-central-1.pooler.supabase.com",
     "port": 6543,
     "database": "postgres",
-    "user": "postgres.<db_name>",
-    "password": "YOUR_SUPABASE_DB_PASSWORD"
+    "user": "postgres.<project_id>",
+    "password": "YOUR_SUPABASE_DB_PASSWORD",
+    "ssl": true
   },
   {
     "type": "mongodb",
