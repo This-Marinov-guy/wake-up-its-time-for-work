@@ -1,18 +1,26 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=64"
 
-RUN apk add --no-cache dcron
+# Install cron
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends cron \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --omit=dev --no-cache
+RUN npm install --omit=dev
 
 COPY wake.js ./
-COPY crontab /etc/crontabs/root
+COPY crontab /etc/cron.d/db-waker
 
-RUN mkdir -p /var/log
+# Permissions required by cron
+RUN chmod 0644 /etc/cron.d/db-waker \
+ && crontab /etc/cron.d/db-waker \
+ && mkdir -p /var/log \
+ && touch /var/log/db-waker.log
 
-CMD ["sh", "-c", "crond -f -l 8"]
+# Run cron in foreground (Debian-safe)
+CMD ["cron", "-f"]
