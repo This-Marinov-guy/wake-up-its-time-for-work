@@ -1,0 +1,2 @@
+# Wake databases every 5 days at 03:00
+0 3 */5 * * node /app/wake.js >> /var/log/db-waker.log 2>&1
