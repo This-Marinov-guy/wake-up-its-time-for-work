@@ -1,0 +1,17 @@
+[
+  {
+    "type": "postgres",
+    "name": "supabase-prod",
+    "host": "db.jvmkpsjvpeeuqhuwmbqd.supabase.co",
+    "port": 5432,
+    "database": "postgres",
+    "user": "postgres",
+    "password": "YOUR_SUPABASE_DB_PASSWORD"
+  },
+  {
+    "type": "mongodb",
+    "name": "mongo-prod",
+    "uri": "mongodb+srv://user:password@cluster.mongodb.net/mydb"
+  }
+]
+
