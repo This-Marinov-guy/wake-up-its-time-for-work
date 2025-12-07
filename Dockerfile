@@ -22,5 +22,8 @@ RUN chmod 0644 /etc/cron.d/db-waker \
  && mkdir -p /var/log \
  && touch /var/log/db-waker.log
 
+# Ensure databases.json directory exists (will be mounted as volume)
+RUN mkdir -p /app && chmod 755 /app
+
 # Run cron in foreground (Debian-safe)
 CMD ["cron", "-f"]
