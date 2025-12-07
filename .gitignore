@@ -1,2 +1,6 @@
 database.json
 databases.json
+node_modules
+.env
+package-lock.json
+package.json

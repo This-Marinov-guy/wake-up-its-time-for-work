@@ -2,7 +2,7 @@
   {
     "type": "postgres",
     "name": "supabase-prod",
-    "host": "aws-0-eu-central-1.pooler.supabase.com",
+    "host": "<aws-pooler-host>",
     "port": 6543,
     "database": "postgres",
     "user": "postgres.<project_id>",
