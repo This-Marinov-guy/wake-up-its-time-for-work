@@ -30,8 +30,11 @@ const wakePostgres = async (db) => {
 
   try {
     await client.connect();
-    await client.query("SELECT 1;");
-    console.log(`[OK][Postgres] ${db.name}`);
+    // Run a lightweight ping multiple times to keep poolers awake
+    for (let i = 0; i < 5; i++) {
+      await client.query("SELECT 1;");
+    }
+    console.log(`[OK][Postgres] ${db.name} (5 pings)`);
   } catch (err) {
     console.error(`[ERROR][Postgres] ${db.name}: ${err.message}`);
   } finally {
