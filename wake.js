@@ -30,11 +30,34 @@ const wakePostgres = async (db) => {
 
   try {
     await client.connect();
-    // Run a lightweight ping multiple times to keep poolers awake
-    for (let i = 0; i < 5; i++) {
-      await client.query("SELECT 1;");
+    
+    // Get up to 3 tables from the database
+    const tablesResult = await client.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+        AND table_type = 'BASE TABLE'
+      LIMIT 3
+    `);
+    
+    const tables = tablesResult.rows.map(row => row.table_name);
+    
+    if (tables.length === 0) {
+      console.log(`[OK][Postgres] ${db.name} (no tables found)`);
+      return;
     }
-    console.log(`[OK][Postgres] ${db.name} (5 pings)`);
+    
+    // Fetch 10 rows from each table
+    for (const table of tables) {
+      try {
+        await client.query(`SELECT * FROM "${table}" LIMIT 10`);
+        console.log(`[OK][Postgres] ${db.name} - fetched from table: ${table}`);
+      } catch (tableErr) {
+        console.error(`[WARN][Postgres] ${db.name} - failed to fetch from table ${table}: ${tableErr.message}`);
+      }
+    }
+    
+    console.log(`[OK][Postgres] ${db.name} (queried ${tables.length} table(s))`);
   } catch (err) {
     console.error(`[ERROR][Postgres] ${db.name}: ${err.message}`);
   } finally {
@@ -56,8 +79,29 @@ const wakeMongo = async (db) => {
 
   try {
     await client.connect();
-    await client.db().command({ ping: 1 });
-    console.log(`[OK][MongoDB] ${db.name}`);
+    const mongoDb = client.db();
+    
+    // Get up to 3 collections
+    const collections = await mongoDb.listCollections().toArray();
+    const collectionsToQuery = collections.slice(0, 3).map(col => col.name);
+    
+    if (collectionsToQuery.length === 0) {
+      console.log(`[OK][MongoDB] ${db.name} (no collections found)`);
+      return;
+    }
+    
+    // Fetch 10 documents from each collection
+    for (const collectionName of collectionsToQuery) {
+      try {
+        const collection = mongoDb.collection(collectionName);
+        await collection.find({}).limit(10).toArray();
+        console.log(`[OK][MongoDB] ${db.name} - fetched from collection: ${collectionName}`);
+      } catch (collectionErr) {
+        console.error(`[WARN][MongoDB] ${db.name} - failed to fetch from collection ${collectionName}: ${collectionErr.message}`);
+      }
+    }
+    
+    console.log(`[OK][MongoDB] ${db.name} (queried ${collectionsToQuery.length} collection(s))`);
   } catch (err) {
     console.error(`[ERROR][MongoDB] ${db.name}: ${err.message}`);
   } finally {
