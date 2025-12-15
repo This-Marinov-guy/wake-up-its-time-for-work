@@ -4,6 +4,9 @@ import { MongoClient } from "mongodb";
 
 const { Client } = pkg;
 
+// Helper function to add delays between queries
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Read config - supports both Docker (/app/) and local paths
 const configPath =
   process.env.DATABASES_CONFIG ||
@@ -47,11 +50,16 @@ const wakePostgres = async (db) => {
       return;
     }
     
-    // Fetch 10 rows from each table
-    for (const table of tables) {
+    // Fetch 10 rows from each table with delays to keep connection active
+    for (let i = 0; i < tables.length; i++) {
+      const table = tables[i];
       try {
         await client.query(`SELECT * FROM "${table}" LIMIT 10`);
         console.log(`[OK][Postgres] ${db.name} - fetched from table: ${table}`);
+        // Add 2 second delay between queries to keep connection active
+        if (i < tables.length - 1) {
+          await sleep(2000);
+        }
       } catch (tableErr) {
         console.error(`[WARN][Postgres] ${db.name} - failed to fetch from table ${table}: ${tableErr.message}`);
       }
@@ -90,12 +98,17 @@ const wakeMongo = async (db) => {
       return;
     }
     
-    // Fetch 10 documents from each collection
-    for (const collectionName of collectionsToQuery) {
+    // Fetch 10 documents from each collection with delays to keep connection active
+    for (let i = 0; i < collectionsToQuery.length; i++) {
+      const collectionName = collectionsToQuery[i];
       try {
         const collection = mongoDb.collection(collectionName);
         await collection.find({}).limit(10).toArray();
         console.log(`[OK][MongoDB] ${db.name} - fetched from collection: ${collectionName}`);
+        // Add 2 second delay between queries to keep connection active
+        if (i < collectionsToQuery.length - 1) {
+          await sleep(2000);
+        }
       } catch (collectionErr) {
         console.error(`[WARN][MongoDB] ${db.name} - failed to fetch from collection ${collectionName}: ${collectionErr.message}`);
       }

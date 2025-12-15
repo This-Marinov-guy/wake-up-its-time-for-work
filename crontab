@@ -1,5 +1,5 @@
-# Wake databases every day at 03:00
+# Wake databases every 6 hours
 SHELL=/bin/sh
 PATH=/usr/local/bin:/usr/bin:/bin
 
-0 3 * * * root node /app/wake.js >> /var/log/db-waker.log 2>&1
+0 */8 * * * root node /app/wake.js >> /var/log/db-waker.log 2>&1
