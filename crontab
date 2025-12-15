@@ -1,4 +1,4 @@
-# Wake databases every 6 hours
+# Wake databases every 8 hours
 SHELL=/bin/sh
 PATH=/usr/local/bin:/usr/bin:/bin
 
