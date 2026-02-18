@@ -12,7 +12,7 @@
   {
     "type": "mongodb",
     "name": "mongo-prod",
-    "uri": "mongodb+srv://user:password@cluster.mongodb.net/mydb"
+    "uri": "mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB}"
   }
 ]
 
