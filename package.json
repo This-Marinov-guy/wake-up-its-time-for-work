@@ -2,8 +2,10 @@
   "name": "db-waker",
   "version": "1.1.0",
   "type": "module",
+  "folder": "opt/db-wake",
   "scripts": {
-    "test": "docker exec db-waker node /app/wake.js"
+    "test": "docker exec db-waker node /app/wake.js",
+    "check-folder": "docker inspect db-waker --format '{{json .Mounts}}'"
   },
   "dependencies": {
     "pg": "^8.11.3",
