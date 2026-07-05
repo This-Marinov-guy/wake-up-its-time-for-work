@@ -7,12 +7,22 @@
     "database": "postgres",
     "user": "postgres.<project_id>",
     "password": "YOUR_SUPABASE_DB_PASSWORD",
-    "ssl": true
+    "ssl": true,
+    "snapshot": {
+      "enabled": true,
+      "frequency": "weekly",
+      "maxSnapshots": 8
+    }
   },
   {
     "type": "mongodb",
     "name": "mongo-prod",
-    "uri": "mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB}"
+    "uri": "mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@${process.env.DB}",
+    "snapshot": {
+      "enabled": true,
+      "frequency": "monthly",
+      "maxSnapshots": 6,
+      "dir": "mongo-prod"
+    }
   }
 ]
-

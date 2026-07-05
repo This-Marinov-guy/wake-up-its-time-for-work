@@ -1,8 +1,12 @@
 import fs from "fs";
+import path from "path";
+import { execFile } from "child_process";
+import { promisify } from "util";
 import pkg from "pg";
 import { MongoClient } from "mongodb";
 
 const { Client } = pkg;
+const execFileAsync = promisify(execFile);
 
 // Helper function to add delays between queries
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,6 +18,127 @@ const configPath =
     ? "/app/databases.json"
     : "./databases.json");
 const databases = JSON.parse(fs.readFileSync(configPath, "utf8"));
+
+// Snapshots are stored outside the repo - supports both Docker (/app/) and local paths
+const snapshotsBaseDir =
+  process.env.SNAPSHOTS_DIR ||
+  (fs.existsSync("/app/databases.json") ? "/app/backups" : "./backups");
+
+// How many days between snapshots for each supported frequency
+const FREQUENCY_DAYS = {
+  daily: 1,
+  weekly: 7,
+  biweekly: 14,
+  monthly: 30,
+  quarterly: 91,
+  "semi-annually": 182,
+  annually: 365,
+};
+
+const DEFAULT_MAX_SNAPSHOTS = 10;
+const DEFAULT_FREQUENCY = "monthly";
+
+const getSnapshotIntervalDays = (snapshot) => {
+  if (snapshot.intervalDays) return snapshot.intervalDays;
+  const days = FREQUENCY_DAYS[snapshot.frequency];
+  if (days === undefined) {
+    console.error(
+      `[SNAPSHOT][WARN] Unknown frequency "${snapshot.frequency}", falling back to "${DEFAULT_FREQUENCY}"`
+    );
+    return FREQUENCY_DAYS[DEFAULT_FREQUENCY];
+  }
+  return days;
+};
+
+const listSnapshots = (dir) => {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .map((file) => {
+      const fullPath = path.join(dir, file);
+      return { file, fullPath, mtime: fs.statSync(fullPath).mtimeMs };
+    })
+    .sort((a, b) => a.mtime - b.mtime);
+};
+
+const isSnapshotDue = (dir, intervalDays) => {
+  const snapshots = listSnapshots(dir);
+  if (snapshots.length === 0) return true;
+  const last = snapshots[snapshots.length - 1];
+  const ageDays = (Date.now() - last.mtime) / (1000 * 60 * 60 * 24);
+  return ageDays >= intervalDays;
+};
+
+// Deletes the oldest snapshots once we're over the configured max, so disk usage stays bounded
+const pruneSnapshots = (dir, maxSnapshots) => {
+  const snapshots = listSnapshots(dir);
+  const excess = snapshots.length - maxSnapshots;
+  for (let i = 0; i < excess; i++) {
+    fs.unlinkSync(snapshots[i].fullPath);
+    console.log(`[SNAPSHOT] ${path.basename(dir)} - removed oldest snapshot: ${snapshots[i].file}`);
+  }
+};
+
+// Runs `dumpFn(dir, timestamp) -> filePath` when the configured snapshot is due, then prunes old ones
+const runSnapshot = async (db, dumpFn) => {
+  const snapshot = db.snapshot;
+  if (!snapshot || snapshot.enabled === false) return;
+
+  const dir = path.join(snapshotsBaseDir, snapshot.dir || db.name);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const intervalDays = getSnapshotIntervalDays(snapshot);
+  if (!isSnapshotDue(dir, intervalDays)) {
+    console.log(`[SNAPSHOT] ${db.name} - not due yet (every ${intervalDays}d)`);
+    return;
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  let outFile;
+  try {
+    outFile = await dumpFn(dir, timestamp);
+    console.log(`[SNAPSHOT][OK] ${db.name} -> ${outFile}`);
+  } catch (err) {
+    console.error(`[SNAPSHOT][ERROR] ${db.name}: ${err.message}`);
+    return;
+  }
+
+  pruneSnapshots(dir, snapshot.maxSnapshots ?? DEFAULT_MAX_SNAPSHOTS);
+};
+
+const dumpPostgres = (db) => async (dir, timestamp) => {
+  const outFile = path.join(dir, `${db.name}-${timestamp}.dump`);
+  await execFileAsync(
+    "pg_dump",
+    [
+      "-h", db.host,
+      "-p", String(db.port),
+      "-U", db.user,
+      "-d", db.database,
+      "-Fc",
+      "-f", outFile,
+    ],
+    {
+      env: {
+        ...process.env,
+        PGPASSWORD: db.password,
+        PGSSLMODE: db.ssl ? "require" : "prefer",
+      },
+      maxBuffer: 1024 * 1024 * 100,
+    }
+  );
+  return outFile;
+};
+
+const dumpMongo = (db) => async (dir, timestamp) => {
+  const outFile = path.join(dir, `${db.name}-${timestamp}.archive.gz`);
+  await execFileAsync(
+    "mongodump",
+    ["--uri", db.uri, `--archive=${outFile}`, "--gzip"],
+    { maxBuffer: 1024 * 1024 * 100 }
+  );
+  return outFile;
+};
 
 const wakePostgres = async (db) => {
   const client = new Client({
@@ -130,8 +255,10 @@ const wakeMongo = async (db) => {
 for (const db of databases) {
   if (db.type === "postgres") {
     await wakePostgres(db);
+    await runSnapshot(db, dumpPostgres(db));
   } else if (db.type === "mongodb") {
     await wakeMongo(db);
+    await runSnapshot(db, dumpMongo(db));
   } else {
     console.error(`[SKIP] Unknown type: ${db.type}`);
   }
